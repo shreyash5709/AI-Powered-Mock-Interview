@@ -10,10 +10,13 @@ import { useEffect } from 'react'
 import axios from "axios"
 import { ServerUrl } from '../App'
 import { BsArrowRight } from 'react-icons/bs'
+import WebcamAnalyzer from './VideoAnalysis/WebcamAnalyzer';
+import VideoRecorder from './VideoAnalysis/VideoRecorder';
 
 function Step2Interview({ interviewData, onFinish }) {
   const { interviewId, questions, userName } = interviewData;
   const [isIntroPhase, setIsIntroPhase] = useState(true);
+  const [nonVerbalMetrics, setNonVerbalMetrics] = useState(null);
 
   const [isMicOn, setIsMicOn] = useState(true);
   const recognitionRef = useRef(null);
@@ -30,7 +33,7 @@ function Step2Interview({ interviewData, onFinish }) {
   const [voiceGender, setVoiceGender] = useState("female");
   const [subtitle, setSubtitle] = useState("");
 
-
+  const [isInterviewActive, setIsInterviewActive] = useState(true);
   const videoRef = useRef(null);
 
   const currentQuestion = questions[currentIndex];
@@ -255,8 +258,8 @@ function Step2Interview({ interviewData, onFinish }) {
         interviewId,
         questionIndex: currentIndex,
         answer,
-        timeTaken:
-          currentQuestion.timeLimit - timeLeft,
+        timeTaken: currentQuestion.timeLimit - timeLeft,
+        nonVerbalMetrics,
       } , {withCredentials:true})
 
       setFeedback(result.data.feedback)
@@ -290,6 +293,7 @@ setIsSubmitting(false)
   const finishInterview = async () => {
     stopMic()
     setIsMicOn(false)
+    setIsInterviewActive(false);
     try {
       const result = await axios.post(ServerUrl+ "/api/interview/finish" , { interviewId} , {withCredentials:true})
 
@@ -392,19 +396,30 @@ setIsSubmitting(false)
         {/* Text section */}
 
         <div className='flex-1 flex flex-col p-4 sm:p-6 md:p-8 relative'>
-          <h2 className='text-xl sm:text-2xl font-bold text-emerald-600 mb-6'>
-            AI Smart Interview
-          </h2>
-
-
-          {!isIntroPhase && (<div className='relative mb-6 bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm'>
-            <p className='text-xs sm:text-sm text-gray-400 mb-2'>
-              Question {currentIndex + 1} of {questions.length}
-            </p>
-
-            <div className='text-base sm:text-lg font-semibold text-gray-800 leading-relaxed '>{currentQuestion?.question}</div>
-          </div>)
-          }
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="space-y-4">
+              <VideoRecorder isRecording={isInterviewActive && !isIntroPhase} />
+              <WebcamAnalyzer 
+                isActive={isInterviewActive && !isIntroPhase} 
+                onMetricsUpdate={setNonVerbalMetrics} 
+              />
+            </div>
+            <div>
+              <h2 className='text-xl sm:text-2xl font-bold text-emerald-600 mb-6'>
+                  AI Smart Interview
+              </h2>
+              {!isIntroPhase && (
+                <div className='relative mb-6 bg-gray-50 p-4 sm:p-6 rounded-2xl border border-gray-200 shadow-sm'>
+                    <p className='text-xs sm:text-sm text-gray-400 mb-2'>
+                      Question {currentIndex + 1} of {questions.length}
+                    </p>
+                    <div className='text-base sm:text-lg font-semibold text-gray-800 leading-relaxed '>
+                      {currentQuestion?.question}
+                    </div>
+                </div>
+              )}
+            </div>
+          </div>
           <textarea
             placeholder="Type your answer here..."
             onChange={(e) => setAnswer(e.target.value)}

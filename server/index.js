@@ -2,6 +2,9 @@ import express from "express"
 import dotenv from "dotenv"
 import connectDb from "./config/connectDb.js"
 import cookieParser from "cookie-parser"
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import compression from 'compression'
 dotenv.config()
 import cors from "cors"
 import authRouter from "./routes/auth.route.js"
@@ -10,9 +13,14 @@ import interviewRouter from "./routes/interview.route.js"
 import paymentRouter from "./routes/payment.route.js"
 
 const app = express()
+
+app.use(helmet())
+app.use(compression())
+app.use('/api/', rateLimit({ windowMs: 15*60*1000, max: 500 }))
+
 app.use(cors({
-    origin:["http://localhost:5173", "https://ai-powered-mock-interview-frontend.onrender.com"],
-    credentials:true
+    origin:["http://localhost:5173", "https://ai-powered-mock-interview-frontend.onrender.com"],
+    credentials:true
 }))
 
 app.use((req, res, next) => {
@@ -31,6 +39,6 @@ app.use("/api/payment" , paymentRouter)
 
 const PORT = process.env.PORT || 6000
 app.listen(PORT , ()=>{
-    console.log(`Server running on port ${PORT}`)
-    connectDb()
+    console.log(`Server running on port ${PORT}`)
+    connectDb()
 })

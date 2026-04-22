@@ -1,15 +1,44 @@
 import mongoose from "mongoose";
 
 const questionsSchema = new mongoose.Schema({
-     question: String,
-  difficulty: String,
-  timeLimit: Number,
-  answer: String,
-  feedback: String,
-  score: { type: Number, default: 0 },
-  confidence: { type: Number, default: 0 },
-communication: { type: Number, default: 0 },
-correctness: { type: Number, default: 0 },
+    question: String,
+    difficulty: String,
+    timeLimit: Number,
+    answer: String,
+    feedback: String,
+    score: { type: Number, default: 0 },
+    confidence: { type: Number, default: 0 },
+    communication: { type: Number, default: 0 },
+    correctness: { type: Number, default: 0 },
+
+    nonVerbalMetrics: {
+        eyeContact: Number,
+        smileScore: Number,
+        attentionScore: Number,
+    },
+    fillerAnalysis: {
+        counts: Object,
+        total: Number,
+        fillerRate: Number
+    },
+    starAnalysis: {
+        components: Object,
+        score: Number
+    },
+    sentimentAnalysis: {
+        score: Number,
+        tone: String
+    },
+    paceAnalysis: {
+        wpm: Number,
+        assessment: String
+    },
+    scores: {
+        communicationScore: Number,
+        contentScore: Number,
+        nonVerbalScore: Number,
+        overallScore: Number,
+    },
 })
 
 

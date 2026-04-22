@@ -3,6 +3,7 @@ import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { askAi } from "../services/openRouter.service.js";
 import User from "../models/user.model.js";
 import Interview from "../models/interview.model.js";
+import * as nlpService from "../services/nlpAnalysisService.js";
 
 export const analyzeResume = async (req, res) => {
   try {
@@ -36,17 +37,17 @@ export const analyzeResume = async (req, res) => {
       {
         role: "system",
         content: `
-Extract structured data from resume.
+          Extract structured data from resume.
 
-Return strictly JSON:
+          Return strictly JSON:
 
-{
-  "role": "string",
-  "experience": "string",
-  "projects": ["project1", "project2"],
-  "skills": ["skill1", "skill2"]
-}
-`
+          {
+            "role": "string",
+            "experience": "string",
+            "projects": ["project1", "project2"],
+            "skills": ["skill1", "skill2"]
+          }
+        `
       },
       {
         role: "user",
@@ -119,12 +120,12 @@ export const generateQuestion = async (req, res) => {
     const safeResume = resumeText?.trim() || "None";
 
     const userPrompt = `
-    Role:${role}
-    Experience:${experience}
-    InterviewMode:${mode}
-    Projects:${projectText}
-    Skills:${skillsText},
-    Resume:${safeResume}
+      Role:${role}
+      Experience:${experience}
+      InterviewMode:${mode}
+      Projects:${projectText}
+      Skills:${skillsText},
+      Resume:${safeResume}
     `;
 
     if (!userPrompt.trim()) {
@@ -138,31 +139,31 @@ export const generateQuestion = async (req, res) => {
       {
         role: "system",
         content: `
-You are a real human interviewer conducting a professional interview.
+          You are a real human interviewer conducting a professional interview.
 
-Speak in simple, natural English as if you are directly talking to the candidate.
+          Speak in simple, natural English as if you are directly talking to the candidate.
 
-Generate exactly 5 interview questions.
+          Generate exactly 5 interview questions.
 
-Strict Rules:
-- Each question must contain between 15 and 25 words.
-- Each question must be a single complete sentence.
-- Do NOT number them.
-- Do NOT add explanations.
-- Do NOT add extra text before or after.
-- One question per line only.
-- Keep language simple and conversational.
-- Questions must feel practical and realistic.
+          Strict Rules:
+          - Each question must contain between 15 and 25 words.
+          - Each question must be a single complete sentence.
+          - Do NOT number them.
+          - Do NOT add explanations.
+          - Do NOT add extra text before or after.
+          - One question per line only.
+          - Keep language simple and conversational.
+          - Questions must feel practical and realistic.
 
-Difficulty progression:
-Question 1 → easy  
-Question 2 → easy  
-Question 3 → medium  
-Question 4 → medium  
-Question 5 → hard  
+          Difficulty progression:
+          Question 1 → easy  
+          Question 2 → easy  
+          Question 3 → medium  
+          Question 4 → medium  
+          Question 5 → hard  
 
-Make questions based on the candidate’s role, experience,interviewMode, projects, skills, and resume details.
-`
+          Make questions based on the candidate’s role, experience,interviewMode, projects, skills, and resume details.
+        `
       }
       ,
       {
@@ -225,7 +226,7 @@ Make questions based on the candidate’s role, experience,interviewMode, projec
 
 export const submitAnswer = async (req, res) => {
   try {
-    const { interviewId, questionIndex, answer, timeTaken } = req.body
+    const { interviewId, questionIndex, answer, timeTaken, nonVerbalMetrics } = req.body
 
     const interview = await Interview.findById(interviewId)
     const question = interview.questions[questionIndex]
@@ -256,58 +257,84 @@ export const submitAnswer = async (req, res) => {
       });
     }
 
+    const duration = timeTaken || 60;
+    const fillerAnalysis = nlpService.detectFillerWords(answer);
+    const starAnalysis = nlpService.analyzeSTAR(answer);
+    const sentimentAnalysis = nlpService.analyzeSentiment(answer);
+    const paceAnalysis = nlpService.calculateSpeakingPace(answer, duration);
+
+    const communicationScore = Math.max(0, 100 - (fillerAnalysis.fillerRate * 5));
+    const contentScore = starAnalysis.score;
+    const nonVerbalScore = nonVerbalMetrics 
+      ? (nonVerbalMetrics.eyeContact + nonVerbalMetrics.attentionScore) / 2 
+      : 0;
+
+    const overallScore = Math.round(
+      (communicationScore * 0.3) + 
+      (contentScore * 0.4) + 
+      (nonVerbalScore * 0.3)
+    );
+
+    const analysis = { 
+      fillerAnalysis, 
+      starAnalysis, 
+      sentimentAnalysis, 
+      paceAnalysis, 
+      nonVerbalMetrics, 
+      scores: { communicationScore, contentScore, nonVerbalScore, overallScore } 
+    };
 
     const messages = [
       {
         role: "system",
         content: `
-You are a professional human interviewer evaluating a candidate's answer in a real interview.
+          You are a professional human interviewer evaluating a candidate's answer in a real interview.
 
-Evaluate naturally and fairly, like a real person would.
+          Evaluate naturally and fairly, like a real person would.
 
-Score the answer in these areas (0 to 10):
+          Score the answer in these areas (0 to 10):
 
-1. Confidence – Does the answer sound clear, confident, and well-presented?
-2. Communication – Is the language simple, clear, and easy to understand?
-3. Correctness – Is the answer accurate, relevant, and complete?
+          1. Confidence – Does the answer sound clear, confident, and well-presented?
+          2. Communication – Is the language simple, clear, and easy to understand?
+          3. Correctness – Is the answer accurate, relevant, and complete?
 
-Rules:
-- Be realistic and unbiased.
-- Do not give random high scores.
-- If the answer is weak, score low.
-- If the answer is strong and detailed, score high.
-- Consider clarity, structure, and relevance.
+          Rules:
+          - Be realistic and unbiased.
+          - Do not give random high scores.
+          - If the answer is weak, score low.
+          - If the answer is strong and detailed, score high.
+          - Consider clarity, structure, and relevance.
 
-Calculate:
-finalScore = average of confidence, communication, and correctness (rounded to nearest whole number).
+          Calculate:
+          finalScore = average of confidence, communication, and correctness (rounded to nearest whole number).
 
-Feedback Rules:
-- Write natural human feedback.
-- 10 to 15 words only.
-- Sound like real interview feedback.
-- Can suggest improvement if needed.
-- Do NOT repeat the question.
-- Do NOT explain scoring.
-- Keep tone professional and honest.
+          Feedback Rules:
+          - Write natural human feedback.
+          - 10 to 15 words only.
+          - Sound like real interview feedback.
+          - Can suggest improvement if needed.
+          - Do NOT repeat the question.
+          - Do NOT explain scoring.
+          - Keep tone professional and honest.
 
-Return ONLY valid JSON in this format:
+          Return ONLY valid JSON in this format:
 
-{
-  "confidence": number,
-  "communication": number,
-  "correctness": number,
-  "finalScore": number,
-  "feedback": "short human feedback"
-}
-`
+          {
+            "confidence": number,
+            "communication": number,
+            "correctness": number,
+            "finalScore": number,
+            "feedback": "short human feedback"
+          }
+        `
       }
       ,
       {
         role: "user",
         content: `
-Question: ${question.question}
-Answer: ${answer}
-`
+          Question: ${question.question}
+          Answer: ${answer}
+        `
       }
     ];
 
@@ -323,6 +350,14 @@ Answer: ${answer}
     question.correctness = parsed.correctness;
     question.score = parsed.finalScore;
     question.feedback = parsed.feedback;
+
+    question.fillerAnalysis = fillerAnalysis;
+    question.starAnalysis = starAnalysis;
+    question.sentimentAnalysis = sentimentAnalysis;
+    question.paceAnalysis = paceAnalysis;
+    question.nonVerbalMetrics = nonVerbalMetrics;
+    question.scores = analysis.scores;
+
     await interview.save();
 
 
@@ -442,12 +477,18 @@ export const getInterviewReport = async (req,res) => {
       ? totalCorrectness / totalQuestions
       : 0;
 
-       return res.json({
+    return res.json({
       finalScore: interview.finalScore,
       confidence: Number(avgConfidence.toFixed(1)),
       communication: Number(avgCommunication.toFixed(1)),
       correctness: Number(avgCorrectness.toFixed(1)),
-      questionWiseScore: interview.questions
+      questionWiseScore: interview.questions,
+
+      nonVerbalMetrics: interview.questions[0]?.nonVerbalMetrics || {},
+      fillerAnalysis: interview.questions[0]?.fillerAnalysis || {},
+      starAnalysis: interview.questions[0]?.starAnalysis || {},
+      paceAnalysis: interview.questions[0]?.paceAnalysis || {},
+      
     });
 
   } catch (error) {
